@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" xmlns:fractals="fractals.*" applicationComplete="{calculateFractal()}" frameRate="12" viewSourceURL="srcview/index.html">
+	<mx:Style>
+		.zoomer {
+			background-alpha: 0.5;
+			background-color: white;
+			border-color: white;
+			border-style: solid;
+		}
+		
+		.progressView {
+			backgroundColor: #090909;
+			cornerRadius: 5.0;
+			borderStyle: solid;
+		}
+		
+		.historyView {
+			backgroundColor: #090909;
+			cornerRadius: 5.0;
+			borderStyle: solid;
+		}
+		
+		.historyTileList {
+			backgroundColor: #090909;
+			border-style: none;
+		}
+		
+		.help {
+			background-alpha: 0.5;
+			background-color: #090909;
+			corner-radius: 5.0;
+			border-style: solid;
+			border-thickness: 1.0;
+			border-color: white;
+		}
+	</mx:Style>
+
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.core.UIComponent;
+			import fractals.MandelbrotHistory;
+			
+			private var zooming : Boolean = false;
+			[Bindable]
+			private var history : ArrayCollection = new ArrayCollection();
+		
+			private function calculateFractal() : void {
+				renderProgressView.visible = true;
+//				mandelbrot.calculate( view.width, view.height );
+//				mandelbrot.calculateSlowly( view.width, view.height );
+				mandelbrot.calculateAsync( view.width, view.height );
+			}
+			
+			private function showFractal( bitmap : BitmapData ) : void {
+				renderProgressView.visible = false;
+				
+				var oldBitmap : DisplayObject = view.getChildByName("mandelbrot");
+				if( oldBitmap ) {
+					view.removeChild( oldBitmap );
+				}
+				
+				var ui : UIComponent = new UIComponent();
+				ui.name = "mandelbrot";
+				ui.graphics.beginBitmapFill( bitmap, null, false );
+				ui.graphics.drawRect( 0, 0, bitmap.width, bitmap.height );
+				ui.graphics.endFill();
+				view.addChild( ui );
+				
+				ui.addEventListener( MouseEvent.MOUSE_DOWN, startZoom, false, 0, true );
+				ui.addEventListener( MouseEvent.MOUSE_MOVE, moveZoom, false, 0, true );
+				ui.addEventListener( MouseEvent.MOUSE_UP, endZoom, false, 0, true );
+			}
+			
+			private function startZoom( event : MouseEvent ) : void {
+				if( isInside( view, event ) ) {
+					zoomer.visible=true;
+					zoomer.x = event.stageX;
+					zoomer.y = event.stageY;
+					zoomer.width = 1;
+					zoomer.height = 1;
+					zooming = true;
+					renderZoomer();
+				}
+			}
+			
+			private function isInside( view : UIComponent, event : MouseEvent ) : Boolean {
+				var left : Point = view.localToGlobal( new Point( view.x, view.y ) );
+				var right : Point = view.localToGlobal( new Point( view.x + view.width, view.y + view.height ) );
+				return event.stageX >= left.x && event.stageX <= right.x && event.stageY >= left.y && event.stageY <= right.y; 
+			}
+			
+			private function moveZoom( event : MouseEvent ) : void {
+				if( zooming ) {
+					zoomer.width = event.stageX - zoomer.x;
+					zoomer.height = event.stageY - zoomer.y;
+					renderZoomer();
+				}
+			}
+			
+			
+			private function endZoom( event : MouseEvent ) : void {
+				if( zooming ) {
+					zoomer.width = event.stageX - zoomer.x;
+					zoomer.height = event.stageY - zoomer.y;
+					zooming = false;
+				}
+			}
+			
+			public function zoom() : void {
+				if( zoomer.visible ) {
+					zoomer.visible = false;
+					addHistory( mandelbrot.zoom( zoomer.x - view.x, zoomer.y - view.y, zoomer.width, zoomer.height ) );
+					calculateFractal();
+				}
+			}
+			
+			private function renderZoomer() : void {
+				zoomer.graphics.clear();
+				zoomer.graphics.beginFill( 0xffffff, 0.5 );
+				zoomer.graphics.drawRect( 0, 0, zoomer.width, zoomer.height );
+				zoomer.graphics.endFill();
+				zoomer.graphics.lineStyle( 1, 0xffffff );
+				zoomer.graphics.drawRect( 0, 0, zoomer.width, zoomer.height );
+			}
+			
+			private function toggleHistory() : void {
+				historyView.visible = !historyView.visible;
+			}
+			
+			private function onKeyUp( event : KeyboardEvent ) : void {
+				var amount : int = event.shiftKey ? 5 : 1;
+				switch( event.keyCode ) {
+					case Keyboard.TAB:
+						toggleHistory();
+						break;
+					case Keyboard.ENTER:
+						zoom();
+						break;
+					case Keyboard.LEFT:
+						moveZooming( -1 * amount, 0 );
+						break;
+					case Keyboard.RIGHT:
+						moveZooming( amount, 0 );
+						break;
+					case Keyboard.UP:
+						moveZooming( 0, -1 * amount );
+						break;
+					case Keyboard.DOWN:
+						moveZooming( 0, amount );
+						break;
+					case Keyboard.ESCAPE:
+						if( help.visible ) {
+							help.visible = false;
+						} else {
+							zoomer.visible = false;
+						}
+						break;
+					case Keyboard.F1:
+						help.visible = true;
+						break;
+				}
+			}
+			
+			private function moveZooming( x : int, y : int ) : void {
+				if( zoomer.visible ) {
+					zoomer.x += x;
+					zoomer.y += y;
+				}
+			}
+			
+			private function restoreHistory( history : MandelbrotHistory ) : void {
+				mandelbrot.restore( history );
+				showFractal( history.bitmapData );
+				addHistory( mandelbrot.history );
+				historyView.visible = false;
+			}
+			
+			private function addHistory( historyItem : MandelbrotHistory ) : void {
+				for each( var item : MandelbrotHistory in history ) {
+					if(  item.bitmapData == historyItem.bitmapData ) {
+						return;
+					}
+				}
+				history.addItem( historyItem );
+			}
+		
+		]]>
+	</mx:Script>
+	
+	<fractals:Shader id="shader" >
+		<fractals:gradientColors>
+			<mx:Array>
+				<mx:Number>0x0000ff</mx:Number>
+				<mx:Number>0xffff00</mx:Number>
+				<mx:Number>0xff0000</mx:Number>
+				<mx:Number>0xffffff</mx:Number>
+			</mx:Array>
+		</fractals:gradientColors>
+		<fractals:gradientPositions>
+			<mx:Array>
+				<mx:Number>0.0</mx:Number>
+				<mx:Number>0.33</mx:Number>
+				<mx:Number>0.66</mx:Number>
+				<mx:Number>1.0</mx:Number>
+			</mx:Array>
+		</fractals:gradientPositions>
+	</fractals:Shader>
+
+	<fractals:Mandelbrot id="mandelbrot" shader="{shader}" maxIteration="1000">
+		<fractals:complete>{showFractal(mandelbrot.bitmap);}</fractals:complete>
+	</fractals:Mandelbrot>
+	
+	<mx:Canvas id="view" backgroundColor="black" left="10" right="10" top="10" bottom="10"/>
+	
+	<mx:Canvas id="renderProgressView" styleName="progressView" visible="false" horizontalCenter="0" verticalCenter="0" minWidth="200" minHeight="50" hideEffect="{fadeOut}" showEffect="{fadeIn}">
+		<mx:ProgressBar id="renderProgress" source="{mandelbrot}" minimum="0.0" maximum="100.0" left="10" right="10" verticalCenter="0" labelPlacement="top" color="white" mode="event"/> 
+	</mx:Canvas>
+	
+	<mx:Canvas id="historyView" styleName="historyView" left="100" right="100" verticalCenter="0" hideEffect="{fadeOut}" showEffect="{fadeIn}" visible="false">
+		<mx:TileList id="historyTileList" styleName="historyTileList" dataProvider="{history}" left="20" right="20" top="10" bottom="10" direction="horizontal" rowHeight="64" columnWidth="64">
+			<mx:click>{ restoreHistory( historyTileList.selectedItem as MandelbrotHistory );}</mx:click>
+			<mx:itemRenderer>
+				<mx:Component>
+					<mx:Image width="64" height="64" scaleContent="true" source="{data.bitmap}"/>
+				</mx:Component>
+			</mx:itemRenderer>
+		</mx:TileList>
+	</mx:Canvas>
+	
+	<mx:UIComponent id="zoomer" styleName="zoomer" visible="false">
+		<mx:mouseUp>{endZoom( event as MouseEvent );}</mx:mouseUp>
+		<mx:mouseMove>{moveZoom(event as MouseEvent);}</mx:mouseMove>
+	</mx:UIComponent>
+	
+	<mx:Canvas id="help" styleName="help" visible="false" verticalCenter="0" horizontalCenter="0">
+		<mx:Label text="Keyboard Help" horizontalCenter="0" top="10" fontSize="18" color="white"/>
+	</mx:Canvas>
+
+	<mx:addedToStage>{stage.addEventListener( KeyboardEvent.KEY_UP, onKeyUp );}</mx:addedToStage>
+
+	<mx:Fade id="fadeIn" alphaFrom="0.0" alphaTo="1.0" duration="1000"/>
+	<mx:Fade id="fadeOut" alphaFrom="1.0" alphaTo="0.0" duration="1000"/>
+	
+</mx:Application>
